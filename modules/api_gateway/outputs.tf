@@ -6,3 +6,8 @@ output "api_url" {
 output "api_execution_arn" {
   value = aws_api_gateway_rest_api.translation_api.execution_arn
 }
+
+output "api_gatway_id" {
+  value = aws_api_gateway_rest_api.translation_api.id
+  
+}

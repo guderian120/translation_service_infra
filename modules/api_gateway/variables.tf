@@ -24,6 +24,16 @@ variable "cognito_user_pool_arn" {
 
 }
 
+variable "lambda_api_key_function_invoke_arn" {
+  description = "value of lambda api key function invoke arn"
+  type = string
+}
+
+variable "lambda_api_key_function_name" {
+  description = "lambda function name for api key"
+  type = string
+  
+}
 
 variable "lambda_upload_function_name" {
   description = "lambda function name"
@@ -32,5 +42,16 @@ variable "lambda_upload_function_name" {
 variable "output_bucket_name" {
   description = "Name of the output S3 bucket"
   type        = string
+  
+}
+
+variable "lambda_get_user_uploads_invoke_arn" {
+  description = "invoke arn of lambda get user uploads"
+  type = string
+  
+}
+variable "lambda_get_user_uploads_function_name" {
+  description = "lambda function name for get user uploads"
+  type = string
   
 }

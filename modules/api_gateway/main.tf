@@ -49,6 +49,12 @@ resource "aws_api_gateway_integration" "upload_integration" {
 
   request_parameters = {
     "integration.request.path.filename" = "method.request.path.filename"
+    
+  }
+  request_templates = {
+    "application/json" = jsonencode({
+      "x-amz-tagging" = "user_email=$context.authorizer.claims.email&user_id=$context.authorizer.claims.sub&upload_time=$context.requestTimeEpoch"
+    })
   }
 }
 
@@ -77,7 +83,7 @@ resource "aws_api_gateway_method_response" "options_response_200" {
   rest_api_id = aws_api_gateway_rest_api.translation_api.id
   resource_id = aws_api_gateway_resource.filename_resource.id
   http_method = aws_api_gateway_method.options_method.http_method
-  status_code = "200"
+  status_code = 200
 
   response_parameters = {
     "method.response.header.Access-Control-Allow-Headers" = true,
@@ -110,7 +116,7 @@ resource "aws_api_gateway_method_response" "upload_response_200" {
   rest_api_id = aws_api_gateway_rest_api.translation_api.id
   resource_id = aws_api_gateway_resource.filename_resource.id
   http_method = aws_api_gateway_method.upload_method.http_method
-  status_code = "200"
+  status_code = 200
 
   response_parameters = {
     "method.response.header.Access-Control-Allow-Origin" = true
@@ -134,7 +140,16 @@ resource "aws_api_gateway_deployment" "deployment" {
   rest_api_id = aws_api_gateway_rest_api.translation_api.id
 
   triggers = {
-    redeploy = timestamp()
+    redeploy = sha1(jsonencode([
+      aws_api_gateway_integration.upload_integration,
+      aws_api_gateway_integration.options_integration,
+      aws_api_gateway_integration.list_files_integration,
+      aws_api_gateway_integration.files_options_integration,
+      aws_api_gateway_integration.api_upload_integration,
+      aws_api_gateway_integration.api_upload_options_integration,
+      aws_api_gateway_integration.user_uploads_integration,
+      aws_api_gateway_integration.user_uploads_options_integration
+    ]))
   }
 
   depends_on = [
@@ -161,6 +176,120 @@ resource "aws_api_gateway_stage" "prod" {
 
 
 
+####  GET user uploads API ####
+
+resource "aws_api_gateway_resource" "user_uploads_resource" {
+  rest_api_id = aws_api_gateway_rest_api.translation_api.id
+  parent_id   = aws_api_gateway_rest_api.translation_api.root_resource_id
+  path_part   = "get_user_uploads"
+}
+
+# GET method for user uploads with Cognito auth
+resource "aws_api_gateway_method" "user_uploads_method" {
+  rest_api_id   = aws_api_gateway_rest_api.translation_api.id
+  resource_id   = aws_api_gateway_resource.user_uploads_resource.id
+  http_method   = "GET"
+  authorization = "COGNITO_USER_POOLS"
+  authorizer_id = aws_api_gateway_authorizer.cognito.id
+}
+
+# Lambda integration for user uploads
+resource "aws_api_gateway_integration" "user_uploads_integration" {
+  rest_api_id             = aws_api_gateway_rest_api.translation_api.id
+  resource_id             = aws_api_gateway_resource.user_uploads_resource.id
+  http_method             = aws_api_gateway_method.user_uploads_method.http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = var.lambda_get_user_uploads_invoke_arn
+}
+
+# Method response for user uploads
+resource "aws_api_gateway_method_response" "user_uploads_response_200" {
+  rest_api_id = aws_api_gateway_rest_api.translation_api.id
+  resource_id = aws_api_gateway_resource.user_uploads_resource.id
+  http_method = aws_api_gateway_method.user_uploads_method.http_method
+  status_code = 200
+
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Origin" = true
+  }
+}
+
+# Integration response for user uploads
+resource "aws_api_gateway_integration_response" "user_uploads_integration_response" {
+  rest_api_id = aws_api_gateway_rest_api.translation_api.id
+  resource_id = aws_api_gateway_resource.user_uploads_resource.id
+  http_method = aws_api_gateway_method.user_uploads_method.http_method
+  status_code = aws_api_gateway_method_response.user_uploads_response_200.status_code
+
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Origin" = "'*'"
+  }
+
+   depends_on = [
+    aws_api_gateway_integration.user_uploads_integration,
+    aws_api_gateway_method_response.user_uploads_response_200
+  ]
+}
+
+# CORS OPTIONS method for user uploads
+resource "aws_api_gateway_method" "user_uploads_options_method" {
+  rest_api_id   = aws_api_gateway_rest_api.translation_api.id
+  resource_id   = aws_api_gateway_resource.user_uploads_resource.id
+  http_method   = "OPTIONS"
+  authorization = "NONE"
+}
+
+# CORS integration for user uploads
+resource "aws_api_gateway_integration" "user_uploads_options_integration" {
+  rest_api_id = aws_api_gateway_rest_api.translation_api.id
+  resource_id = aws_api_gateway_resource.user_uploads_resource.id
+  http_method = aws_api_gateway_method.user_uploads_options_method.http_method
+  type        = "MOCK"
+
+  request_templates = {
+    "application/json" = jsonencode({
+      statusCode = 200
+    })
+  }
+}
+
+# CORS method response for user uploads
+resource "aws_api_gateway_method_response" "user_uploads_options_response_200" {
+  rest_api_id = aws_api_gateway_rest_api.translation_api.id
+  resource_id = aws_api_gateway_resource.user_uploads_resource.id
+  http_method = aws_api_gateway_method.user_uploads_options_method.http_method
+  status_code = 200
+
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = true,
+    "method.response.header.Access-Control-Allow-Methods" = true,
+    "method.response.header.Access-Control-Allow-Origin"  = true
+  }
+}
+
+# CORS integration response for user uploads
+resource "aws_api_gateway_integration_response" "user_uploads_options_integration_response" {
+  rest_api_id = aws_api_gateway_rest_api.translation_api.id
+  resource_id = aws_api_gateway_resource.user_uploads_resource.id
+  http_method = aws_api_gateway_method.user_uploads_options_method.http_method
+  status_code = aws_api_gateway_method_response.user_uploads_options_response_200.status_code
+
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'",
+    "method.response.header.Access-Control-Allow-Methods" = "'GET,OPTIONS'",
+    "method.response.header.Access-Control-Allow-Origin"  = "'*'"
+  }
+}
+
+# Lambda permission for the new endpoint
+resource "aws_lambda_permission" "api_gateway_user_uploads_permission" {
+  statement_id  = "AllowAPIGatewayInvokeUserUploads"
+  action        = "lambda:InvokeFunction"
+  function_name = var.lambda_get_user_uploads_function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_api_gateway_rest_api.translation_api.execution_arn}/*/${aws_api_gateway_method.user_uploads_method.http_method}${aws_api_gateway_resource.user_uploads_resource.path}"
+}
 
 
 
@@ -173,6 +302,35 @@ resource "aws_api_gateway_stage" "prod" {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#### LIST ALL FIleS API #### /files
 
 resource "aws_api_gateway_resource" "list_files_resource" {
   rest_api_id = aws_api_gateway_rest_api.translation_api.id
@@ -206,7 +364,7 @@ resource "aws_api_gateway_method_response" "list_files_response_200" {
   rest_api_id = aws_api_gateway_rest_api.translation_api.id
   resource_id = aws_api_gateway_resource.list_files_resource.id
   http_method = aws_api_gateway_method.list_files_method.http_method
-  status_code = "200"
+  status_code = 200
 
   response_parameters = {
     "method.response.header.Access-Control-Allow-Origin" = true
@@ -265,7 +423,7 @@ resource "aws_api_gateway_method_response" "files_options_response_200" {
   rest_api_id = aws_api_gateway_rest_api.translation_api.id
   resource_id = aws_api_gateway_resource.list_files_resource.id
   http_method = aws_api_gateway_method.files_options_method.http_method
-  status_code = "200"
+  status_code = 200
 
   response_parameters = {
     "method.response.header.Access-Control-Allow-Headers" = true,
@@ -306,14 +464,20 @@ resource "aws_api_gateway_integration_response" "files_options_integration_respo
 
 
 
-# New resource for the api_upload path
+
+### GET API KEYS API ### /api_keys
 resource "aws_api_gateway_resource" "api_upload_resource" {
+  rest_api_id = aws_api_gateway_rest_api.translation_api.id
+  parent_id   = aws_api_gateway_rest_api.translation_api.root_resource_id
+  path_part   = "api_keys"
+}
+
+resource "aws_api_gateway_resource" "api_keys_resource" {
   rest_api_id = aws_api_gateway_rest_api.translation_api.id
   parent_id   = aws_api_gateway_rest_api.translation_api.root_resource_id
   path_part   = "api_upload"
 }
 
-# Method for the api_upload resource (POST is common for Lambda triggers)
 resource "aws_api_gateway_method" "api_upload_method" {
   rest_api_id   = aws_api_gateway_rest_api.translation_api.id
   resource_id   = aws_api_gateway_resource.api_upload_resource.id
@@ -322,41 +486,49 @@ resource "aws_api_gateway_method" "api_upload_method" {
   authorizer_id = aws_api_gateway_authorizer.cognito.id
 }
 
-# Integration with Lambda function
+resource "aws_api_gateway_method" "api_keys_method" {
+  rest_api_id      = aws_api_gateway_rest_api.translation_api.id
+  resource_id      = aws_api_gateway_resource.api_keys_resource.id
+  http_method      = "POST"
+  authorization    = "NONE"
+  api_key_required = true
+}
+
 resource "aws_api_gateway_integration" "api_upload_integration" {
   rest_api_id             = aws_api_gateway_rest_api.translation_api.id
   resource_id             = aws_api_gateway_resource.api_upload_resource.id
   http_method             = aws_api_gateway_method.api_upload_method.http_method
   integration_http_method = "POST"
   type                    = "AWS_PROXY"
+  uri                     = var.lambda_api_key_function_invoke_arn
+}
+
+resource "aws_api_gateway_integration" "api_keys_integration" {
+  rest_api_id             = aws_api_gateway_rest_api.translation_api.id
+  resource_id             = aws_api_gateway_resource.api_keys_resource.id
+  http_method             = aws_api_gateway_method.api_keys_method.http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
   uri                     = var.lambda_upload_function_invoke_arn
-  
-  # AWS_PROXY integrations don't need these:
-  # passthrough_behavior    = "WHEN_NO_MATCH"
-  # credentials             = aws_iam_role.api_gateway_s3.arn
 }
+
 resource "aws_lambda_permission" "api_gateway_upload_permission" {
-  statement_id  = "AllowAPIGatewayInvoke"
+  statement_id  = "AllowAPIGatewayInvokeUpload"
   action        = "lambda:InvokeFunction"
-  function_name = var.lambda_upload_function_name  # Make sure this matches your Lambda's name
+  function_name = var.lambda_api_key_function_name
   principal     = "apigateway.amazonaws.com"
-
-  # Grant permission only to this specific API Gateway
-  source_arn = "${aws_api_gateway_rest_api.translation_api.execution_arn}/*/${aws_api_gateway_method.api_upload_method.http_method}${aws_api_gateway_resource.api_upload_resource.path}"
-}
-# Method response
-resource "aws_api_gateway_method_response" "api_upload_response_200" {
-  rest_api_id = aws_api_gateway_rest_api.translation_api.id
-  resource_id = aws_api_gateway_resource.api_upload_resource.id
-  http_method = aws_api_gateway_method.api_upload_method.http_method
-  status_code = "200"
-
-  response_parameters = {
-    "method.response.header.Access-Control-Allow-Origin" = true
-  }
+  source_arn    = "${aws_api_gateway_rest_api.translation_api.execution_arn}/*/${aws_api_gateway_method.api_upload_method.http_method}${aws_api_gateway_resource.api_upload_resource.path}"
 }
 
-# CORS configuration
+resource "aws_lambda_permission" "api_gateway_keys_permission" {
+  statement_id  = "AllowAPIGatewayInvokeKeys"
+  action        = "lambda:InvokeFunction"
+  function_name = var.lambda_upload_function_name 
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_api_gateway_rest_api.translation_api.execution_arn}/*/${aws_api_gateway_method.api_keys_method.http_method}${aws_api_gateway_resource.api_keys_resource.path}"
+}
+
+# CORS configuration for api_upload
 resource "aws_api_gateway_method" "api_upload_options_method" {
   rest_api_id   = aws_api_gateway_rest_api.translation_api.id
   resource_id   = aws_api_gateway_resource.api_upload_resource.id
@@ -369,7 +541,6 @@ resource "aws_api_gateway_integration" "api_upload_options_integration" {
   resource_id = aws_api_gateway_resource.api_upload_resource.id
   http_method = aws_api_gateway_method.api_upload_options_method.http_method
   type        = "MOCK"
-
   request_templates = {
     "application/json" = jsonencode({
       statusCode = 200
@@ -381,7 +552,7 @@ resource "aws_api_gateway_method_response" "api_upload_options_response_200" {
   rest_api_id = aws_api_gateway_rest_api.translation_api.id
   resource_id = aws_api_gateway_resource.api_upload_resource.id
   http_method = aws_api_gateway_method.api_upload_options_method.http_method
-  status_code = "200"
+  status_code = 200
 
   response_parameters = {
     "method.response.header.Access-Control-Allow-Headers" = true,
@@ -401,11 +572,57 @@ resource "aws_api_gateway_integration_response" "api_upload_options_integration_
     "method.response.header.Access-Control-Allow-Methods" = "'POST,OPTIONS'",
     "method.response.header.Access-Control-Allow-Origin"  = "'*'"
   }
-
-  depends_on = [aws_api_gateway_integration.api_upload_options_integration]
 }
 
+# CORS configuration for api_keys (consistent with api_upload)
+resource "aws_api_gateway_method" "api_keys_options_method" {
+  rest_api_id   = aws_api_gateway_rest_api.translation_api.id
+  resource_id   = aws_api_gateway_resource.api_keys_resource.id
+  http_method   = "OPTIONS"
+  authorization = "NONE"
+}
 
+resource "aws_api_gateway_integration" "api_keys_options_integration" {
+  rest_api_id = aws_api_gateway_rest_api.translation_api.id
+  resource_id = aws_api_gateway_resource.api_keys_resource.id
+  http_method = aws_api_gateway_method.api_keys_options_method.http_method
+  type        = "MOCK"
+
+   request_templates = {
+    "application/json" = jsonencode({
+      statusCode = 200
+    })
+  }
+}
+
+resource "aws_api_gateway_method_response" "api_keys_options_response_200" {
+  rest_api_id = aws_api_gateway_rest_api.translation_api.id
+  resource_id = aws_api_gateway_resource.api_keys_resource.id
+  http_method = aws_api_gateway_method.api_keys_options_method.http_method
+  status_code = 200
+
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = true,
+    "method.response.header.Access-Control-Allow-Methods" = true,
+    "method.response.header.Access-Control-Allow-Origin"  = true
+  }
+   response_models = {
+    "application/json" = "Empty"
+  }
+}
+
+resource "aws_api_gateway_integration_response" "api_keys_options_integration_response" {
+  rest_api_id = aws_api_gateway_rest_api.translation_api.id
+  resource_id = aws_api_gateway_resource.api_keys_resource.id
+  http_method = aws_api_gateway_method.api_keys_options_method.http_method
+  status_code = aws_api_gateway_method_response.api_keys_options_response_200.status_code
+
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'",
+    "method.response.header.Access-Control-Allow-Methods" = "'POST,OPTIONS'",
+    "method.response.header.Access-Control-Allow-Origin"  = "'*'"
+  }
+}
 
 # IAM Role for API Gateway to access S3
 resource "aws_iam_role" "api_gateway_s3" {
@@ -437,6 +654,7 @@ resource "aws_iam_role_policy" "api_gateway_s3_policy" {
         Action = [
           "s3:PutObject",
           "s3:PutObjectAcl",
+          "s3:PutObjectTagging"
         ],
         Resource = [
           "arn:aws:s3:::${var.input_bucket_name}/*"

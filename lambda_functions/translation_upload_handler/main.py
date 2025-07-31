@@ -12,6 +12,7 @@ class TranslationService:
     def __init__(self):
         self._initialize_clients()
         self._load_environment_variables()
+        self.api_keys_table = self.dynamodb.Table('ApiKeyMetadata') 
         
     def _initialize_clients(self):
         """Initialize AWS clients with error handling"""
@@ -37,6 +38,40 @@ class TranslationService:
         except KeyError as e:
             raise RuntimeError(f"Missing environment variable: {str(e)}")
 
+    def _get_user_from_api_key(self, api_key):
+        """Query the ApiKeyIndex GSI correctly"""
+        try:
+            if not api_key:
+                print("Empty API key received")
+                return {}
+
+            response = self.api_keys_table.query(
+                IndexName='ApiKeyIndex',
+                KeyConditionExpression='api_key = :api_key',
+                ExpressionAttributeValues={
+                    ':api_key': api_key
+                },
+                Limit=1
+            )
+            
+            print(f"Query response: {response}")  # Debug output
+            
+            if not response.get('Items'):
+                print(f"No user found for API key: {api_key}")
+                return {}
+                
+            user_data = response['Items'][0]
+            
+            # Verify required fields
+            if not all(k in user_data for k in ['user_id', 'user_email']):
+                print(f"Malformed user data: {user_data}")
+                return {}
+                
+            return user_data
+            
+        except ClientError as e:
+            print(f"DynamoDB error: {e.response['Error']['Message']}")
+            return {}
     def handle_event(self, event, context):
         """Main entry point for Lambda function"""
         try:
@@ -54,13 +89,29 @@ class TranslationService:
             return self._create_response(500, {'error': str(e)})
 
     def _handle_api_request(self, event):
-        """Handle API Gateway requests"""
+        """Handle API Gateway requests with API key authentication"""
         try:
-            user_id = event['requestContext']['authorizer']['claims']['sub']
-            user_email = event['requestContext']['authorizer']['claims']['email']
+            # Extract API key from headers
+            api_key = event.get('headers', {}).get('x-api-key') or event.get('headers', {}).get('X-API-Key')
+            
+            if not api_key:
+                return self._create_response(401, {'error': 'API key is required'})
+            
+            # Get user info from DynamoDB using API key
+            user_info = self._get_user_from_api_key(api_key)
+            if not user_info:
+                return self._create_response(403, {'error': 'Invalid API key'})
+            
+            user_id = user_info.get('user_id')
+            user_email = user_info.get('user_email')
+            
+            if not user_id or not user_email:
+                return self._create_response(403, {'error': 'API key not associated with valid user'})
+
             content_type = event.get('headers', {}).get('Content-Type', '').lower()
             content_length = int(event.get('headers', {}).get('content-length', '0'))
             MAX_SIZE = 102400
+            
             if content_length > MAX_SIZE:
                 return self._create_response(413, {
                     'error': f'Payload size exceeds limit of {MAX_SIZE} bytes',
@@ -71,13 +122,11 @@ class TranslationService:
             if not event.get('body'):
                 return self._create_response(400, {'error': 'Request body is empty'})
 
-
             # Try to detect CSV content regardless of Content-Type
             file_content = self._extract_file_content(event)
             
             # First try to parse as CSV
             try:
-                # Try reading first few lines to verify it's CSV
                 sample_lines = file_content.split('\n')[:3]
                 csv.Sniffer().sniff('\n'.join(sample_lines))
                 result = self.process_csv_content(file_content, user_id, user_email)
@@ -104,7 +153,6 @@ class TranslationService:
                 except json.JSONDecodeError:
                     pass
 
-            # If we get here, we couldn't parse as either CSV or JSON
             return self._create_response(400, {
                 'error': 'Could not determine content type. Please specify valid Content-Type header',
                 'suggested_types': ['text/csv', 'application/json']
@@ -113,18 +161,66 @@ class TranslationService:
         except Exception as e:
             print(f"API request error: {str(e)}")
             return self._create_response(500, {'error': str(e)})
-
+    def _get_user_info_from_tags(self, bucket, key):
+            """Extract user information from S3 object tags"""
+            try:
+                response = self.s3.get_object_tagging(
+                    Bucket=bucket,
+                    Key=key
+                )
+                tags = {t['Key']: t['Value'] for t in response.get('TagSet', [])}
+                
+                user_email = tags.get('user_email')
+                user_id = tags.get('user_id')
+                
+                if not user_email or not user_id:
+                    print(f"Missing user tags in object {bucket}/{key}")
+                    return 'system@s3_upload.com', 'SYSTEM_UPLOAD'
+                    
+                return user_email, user_id
+                
+            except ClientError as e:
+                print(f"Error getting tags: {str(e)}")
+                return 'system@s3_upload.com', 'SYSTEM_UPLOAD'
     def _handle_s3_sqs_event(self, event):
-        """Handle events from S3 or SQS"""
+        """Handle events from S3 or SQS with proper user email extraction"""
         results = []
         for record in event['Records']:
             try:
                 if 's3' in record:
                     bucket = record['s3']['bucket']['name']
                     key = record['s3']['object']['key']
+                    
+                    # Try to get user info from S3 object metadata
+                    try:
+                        user_email, user_id = self._get_user_info_from_tags(bucket, key)
+                        print(f"Processing file for user: {user_email} (ID: {user_id})")
+                        metadata = self.s3.head_object(
+                            Bucket=bucket,
+                            Key=key
+                        )['Metadata']
+                     
+                        if not user_email or not user_id:
+                            # Fall back to extracting from API key if available
+                            api_key = metadata.get('x-amz-meta-api-key')
+                            if api_key:
+                                user_info = self._get_user_from_api_key(api_key)
+                                user_email = user_info.get('user_email')
+                                user_id = user_info.get('user_id')
+                    except ClientError as e:
+                        print(f"Error getting object metadata: {str(e)}")
+                        user_email = None
+                        user_id = None
+                    
+                    # If we still don't have user info, use SYSTEM as fallback
+                    if not user_email or not user_id:
+                        user_email = 'system@s3_upload.com'
+                        user_id = 'SYSTEM_UPLOAD'
+                    
                     result = self.process_file_upload(
-                        bucket, key, 'SYSTEM_UPLOAD', 'system@example.com'
+                        bucket, key, user_id, user_email
                     )
+                    
                 elif 'body' in record:
                     message = json.loads(record['body'])
                     result = self._process_sqs_message(message)
@@ -142,6 +238,26 @@ class TranslationService:
             'results': results
         })
 
+    def process_file_upload(self, bucket, key, user_id, user_email):
+        """Handle file upload process with proper user email"""
+        file_id = str(uuid.uuid4())
+        timestamp = datetime.now().isoformat()
+        
+        try:
+            # Create DynamoDB record with actual user email
+            self._create_dynamo_record(file_id, user_id, user_email, timestamp, key, bucket)
+            self._send_sqs_message(bucket, key, file_id)
+            
+            return {
+                'file_id': file_id,
+                'status': 'QUEUED',
+                'user_email': user_email  # Include email in response for tracking
+            }
+            
+        except Exception as e:
+            print(f"File upload error: {str(e)}")
+            raise   
+
     def _process_sqs_message(self, message):
         """Process message from SQS queue"""
         result = self.process_csv_file(message['bucket'], message['key'])
@@ -158,20 +274,7 @@ class TranslationService:
         
         return result
 
-    def process_file_upload(self, bucket, key, user_id, user_email):
-        """Handle file upload process"""
-        file_id = str(uuid.uuid4())
-        timestamp = datetime.now().isoformat()
-        
-        try:
-            self._create_dynamo_record(file_id, user_id, user_email, timestamp, key, bucket)
-            self._send_sqs_message(bucket, key, file_id)
-            
-            return {'file_id': file_id, 'status': 'QUEUED'}
-            
-        except Exception as e:
-            print(f"File upload error: {str(e)}")
-            raise
+  
 
     def process_csv_content(self, csv_content, user_id, user_email):
         """Process CSV content from request body"""

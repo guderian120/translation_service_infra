@@ -1,4 +1,3 @@
-# modules/dynamodb/main.tf
 resource "aws_dynamodb_table" "translation_metadata" {
   name         = "TranslationMetadata"
   billing_mode = "PAY_PER_REQUEST"
@@ -21,7 +20,7 @@ resource "aws_dynamodb_table" "translation_metadata" {
   }
 
   attribute {
-    name = "status"
+    name = "email"
     type = "S"
   }
 
@@ -32,12 +31,64 @@ resource "aws_dynamodb_table" "translation_metadata" {
   }
 
   global_secondary_index {
-    name            = "StatusIndex"
-    hash_key        = "status"
-    projection_type = "ALL"
+    name               = "email-index"
+    hash_key           = "email"
+    projection_type    = "ALL"  
+    read_capacity      = 5     
+    write_capacity     = 5      
   }
 }
 
+resource "aws_dynamodb_table" "api_key_metadata" {
+  name         = "ApiKeyMetadata"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "user_id"
+  
+  attribute {
+    name = "user_id"
+    type = "S"
+  }
+
+  attribute {
+    name = "api_key"
+    type = "S"
+  }
+
+
+  attribute {
+    name = "user_email"
+    type = "S"
+  }
+
+
+  global_secondary_index {
+    name            = "ApiKeyIndex"
+    hash_key        = "api_key"
+    projection_type = "ALL"
+  }
+
+  global_secondary_index {
+    name            = "UserEmailIndex"
+    hash_key        = "user_email"
+    projection_type = "ALL"
+  }
+
+ 
+
+  tags = {
+    Name        = "ApiKeyMetadata"
+    Environment = "prod"
+    ManagedBy   = "Terraform"
+  }
+}
+
+output "api_table_name" {
+  value = aws_dynamodb_table.api_key_metadata.name
+}
+
+output "api_table_arn" {
+  value = aws_dynamodb_table.api_key_metadata.arn
+}
 
 
 output "dynamodb_table_name" {

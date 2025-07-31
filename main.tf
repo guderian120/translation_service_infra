@@ -11,7 +11,7 @@ terraform {
 
 provider "aws" {
   region  = var.region
-  profile = "sandbox"
+  # profile = "sandbox"
 }
 
 module "s3" {
@@ -34,6 +34,7 @@ module "iam" {
   output_bucket_arn = module.s3.output_bucket_arn
   sqs_queue_arn     = module.sqs.queue_arn
   dynamodb_table_arn = module.dynamodb.dynamodb_table_arn
+  api_table_arn = module.dynamodb.api_table_arn
 }
 
 module "lambda" {
@@ -46,6 +47,8 @@ module "lambda" {
   iam_role                       = module.iam.lambda_role_arn 
   input_bucket_name              = module.s3.input_bucket_name
   dynamodb_table_name            = module.dynamodb.dynamodb_table_name   
+  api_table_name                 = module.dynamodb.api_table_name
+  api_gateway_id                = module.api_gateway.api_gatway_id  
 
 }
 
@@ -54,10 +57,14 @@ module "api_gateway" {
   prefix                = var.prefix
   region                = var.region
   input_bucket_name     = module.s3.input_bucket_name
-  cognito_user_pool_arn = module.cognito.user_pool_arn 
+  cognito_user_pool_arn = module.cognito.user_pool_arn  
   output_bucket_name = module.s3.output_bucket_name 
   lambda_upload_function_invoke_arn = module.lambda.lambda_upload_function_invoke_arn["translation_put_file"]
   lambda_upload_function_name = module.lambda.lambda_function_names["translation_put_file"]
+  lambda_api_key_function_invoke_arn = module.lambda.lambda_upload_function_invoke_arn["translation_get_api_keys"]
+  lambda_api_key_function_name = module.lambda.lambda_function_names["translation_get_api_keys"] 
+  lambda_get_user_uploads_invoke_arn = module.lambda.lambda_upload_function_invoke_arn["translation_get_user_uploads"]
+  lambda_get_user_uploads_function_name = module.lambda.lambda_function_names["translation_get_user_uploads"]
 }
 
 

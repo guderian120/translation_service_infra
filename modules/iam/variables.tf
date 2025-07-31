@@ -18,8 +18,16 @@ variable "sqs_queue_arn" {
   description = "ARN of the SQS queue"
   type        = string
 }
-
+variable "api_table_arn" {
+  description = "arn of api metadata dynamodb table"
+}
 variable "dynamodb_table_arn" {
   description = "arn of dynamo db"
   type = string
+}
+variable "region" {
+  description = "AWS region"
+  type        = string
+  default = "eu-west-1"
+  
 }

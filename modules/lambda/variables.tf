@@ -39,3 +39,13 @@ variable "iam_role" {
   description = "Iam role for lambda"
 }
 
+
+variable "api_table_name" {
+ description = "Name of API Gateway"
+}
+
+variable "api_gateway_id" {
+  description = "ID of the API Gateway"
+  type        = string
+  
+}
