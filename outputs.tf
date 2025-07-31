@@ -23,6 +23,12 @@ output "cognito_client_id" {
   value = module.cognito.client_id
 }
 
+output "api_key_url" {
+  value = "${module.api_gateway.api_base_url}/api_keys"
+}
+output "api_base_url" {
+  value = module.api_gateway.api_base_url
+}
 output "cognito_domain" {
   value = module.cognito.domain
 }

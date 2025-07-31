@@ -4,3 +4,7 @@
 *.hcl
 *.backup
 *.log
+build/*
+build
+frontend
+frontend/*

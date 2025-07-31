@@ -2,24 +2,24 @@
 ## Table of Contents
 1. [Overview](#overview)
 2. [Architecture](#architecture)
-3. [Getting Started](#getting-started)
-4. [API Reference](#api-reference)
-5. [Authentication](#authentication)
-6. [Troubleshooting](#troubleshooting)
-7. [Deployment](#deployment)
-8. [Monitoring](#monitoring)
-9. [Limitations](#limitations)
-10. [FAQ](#faq)
+3. [Easy Start](#easy-start)
+4. [Getting Started](#getting-started)
+5. [API Reference](#api-reference)
+6. [Authentication](#authentication)
+7. [Troubleshooting](#troubleshooting)
+8. [Deployment](#deployment)
+9. [Monitoring](#monitoring)
+10. [Limitations](#limitations)
+11. [FAQ](#faq)
 
 ## Overview
 
-This application provides a serverless solution for translating CSV files from English to Spanish. It features secure user authentication, file upload processing, and asynchronous translation capabilities.
+This application provides a serverless solution for translating CSV files from English to Spanish. It features secure user authentication, file upload processing, and asynchronous translation capabilities with api keys.
 
 ## Architecture
-
+![Architectural Image](media/architecture.png)
 ### Event-Driven Serverless Components
 
-![Architecture Diagram]
 ```
 1. Client → API Gateway → Cognito (Authentication)
 2. Authenticated Request → Lambda (Upload Handler) → S3 (Input Bucket)
@@ -33,7 +33,7 @@ This application provides a serverless solution for translating CSV files from E
   - `translation_upload_handler`: Handles file uploads
   - `translation_processor`: Processes translation jobs
   - `translation_get_user_uploads`: Retrieves user's files
-  - `translation_get_all_files`: Admin file access
+  - `translation_get_all_files`: All file access
   - `translation_api_keys`: Manages translation API keys
 
 - **AWS Services**:
@@ -44,6 +44,75 @@ This application provides a serverless solution for translating CSV files from E
   - API Gateway: REST API interface
   - IAM: Security permissions
 
+
+
+## Easy Start
+
+### One-Command Deployment
+
+Get your translation app up and running with a single command using our automated deployment script:
+
+# Clone the repo
+```
+git clone https://github.com/guderian120/translation_service_infra
+cd translation_service_infra/scripts
+```
+```bash
+sudo chmod +x deploy.sh
+./deploy.sh
+```
+
+This script handles:
+1. Infrastructure provisioning with Terraform
+2. Configuration generation
+3. Docker container deployment
+
+### What the Script Does:
+
+1. **Prerequisites Check**:
+   - Verifies Terraform, Docker, and jq are installed
+   - Ensures AWS credentials are configured
+
+2. **Infrastructure Setup**:
+   - Initializes Terraform
+   - Provisions all AWS resources (Cognito, API Gateway, S3 buckets, etc.)
+
+3. **Configuration Generation**:
+   - Automatically extracts Terraform outputs
+   - Creates environment variables file
+   - Generates Cognito configuration template
+
+4. **Container Deployment**:
+   - Launches the Docker container with proper configuration
+   - Maps container port 80 to host port 8080
+   - Handles cleanup of previous deployments
+
+### Post-Deployment Actions
+
+After successful deployment:
+- Access the app at: [http://localhost:8080](http://localhost:8080)
+- Signup with valid emails and credentials
+- Voila your app is up and running
+- View logs: `docker logs -f translation-app`
+- Stop the app: `docker stop translation-app`
+
+### Windows Users
+
+For Windows systems, I recommend:
+1. Using WSL (Windows Subsystem for Linux)
+2. Running the script unchanged in a WSL terminal
+
+Alternatively, use the PowerShell version available in `/scripts/windows-deploy.ps1`
+
+### Configuration Management
+
+All sensitive configuration is handled through:
+- Environment variables (stored in `cognito.env`)
+- Automatic template processing at runtime
+- Secure Docker container deployment
+
+
+# Manual Approach
 ## Getting Started
 
 ### Prerequisites
@@ -58,8 +127,7 @@ This application provides a serverless solution for translating CSV files from E
    ```bash
    terraform init
    ```
-3. Review variables in `variables.tf`
-4. Deploy:
+3. Deploy:
    ```bash
    terraform apply
    ```
@@ -111,11 +179,8 @@ Authorization: Bearer [JWT_TOKEN]
   }]
   ```
 
-#### 3. Download Translated File
-- **GET** `/files/{fileId}/download`
-- Response: Binary file content
 
-#### 4. API Key Management
+#### 3. API Key Management
 - **GET** `/api-keys`
 - Response:
   ```json
