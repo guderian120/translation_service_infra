@@ -83,7 +83,7 @@ This script handles:
    - Generates Cognito configuration template
 
 4. **Container Deployment**:
-   - Launches the Docker container with proper configuration
+   - Launches the Frontend Docker container with proper configuration
    - Maps container port 80 to host port 8080
    - Handles cleanup of previous deployments
 
