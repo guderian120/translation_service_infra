@@ -104,7 +104,7 @@ run_docker_container() {
     -p 8080:80 \
     -v "$TEMP_DIR:/usr/share/nginx/html/config" \
     --env-file cognito.env \
-    realamponsah/translate_app:latest; then
+    realamponsah/azubi_translate:v1.0; then
     error "Failed to start Docker container"
   fi
   

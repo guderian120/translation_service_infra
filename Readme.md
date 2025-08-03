@@ -14,7 +14,11 @@
 
 ## Overview
 
-This application provides a serverless solution for translating CSV files from English to Spanish. It features secure user authentication, file upload processing, and asynchronous translation capabilities with api keys.
+This application provides a serverless solution for translating CSV files from English to Spanish. It features secure user authentication, file upload processing, and asynchronous translation capabilities with api keys. Access the live application here The application is currently deployed and accessible at:  
+[![Live App](https://img.shields.io/badge/-Live%20App-blue?style=for-the-badge)](https://translation-service-frontend.vercel.app)
+, create an account and start translating files
+
+![Live Demo](media/translate.gif)
 
 ## Architecture
 ![Architectural Image](media/architecture.png)

@@ -162,7 +162,7 @@ function Run-DockerContainer {
             -p 8080:80 `
             -v "${tempDir}:/usr/share/nginx/html/config" `
             --env-file cognito.env `
-            realamponsah/translate_app:latest
+            realamponsah/azubi_translate:v1.0
             
         if ($LASTEXITCODE -ne 0) {
             throw "Failed to start Docker container"
