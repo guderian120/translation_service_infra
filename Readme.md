@@ -10,11 +10,11 @@
 8. [Deployment](#deployment)
 9. [Monitoring](#monitoring)
 10. [Limitations](#limitations)
-11. [FAQ](#faq)
+
 
 ## Overview
 
-This application provides a serverless solution for translating CSV files from English to Spanish. It features secure user authentication, file upload processing, and asynchronous translation capabilities with api keys. Access the live application here The application is currently deployed and accessible at:  
+This application provides a serverless solution for translating CSV files from English to Spanish. It features secure user authentication, file upload processing, and asynchronous translation capabilities with api keys. The application is currently deployed and accessible at:  
 [![Live App](https://img.shields.io/badge/-Live%20App-blue?style=for-the-badge)](https://translation-service-frontend.vercel.app)
 , create an account and start translating files
 
@@ -285,23 +285,7 @@ Authorization: Bearer [JWT_TOKEN]
   - 4xx/5xx API errors
 
 ## Limitations
-- Maximum CSV size: 10MB (SQS payload limit)
+- Maximum CSV size: 2MB for frontend 100 kb for api
 - Supported encodings: UTF-8
-- Rate limits: 1000 translations/hour (adjustable)
+- Rate limits: 100 translations/day (adjustable)
 
-## FAQ
-
-### Q: How do I reset the translation quota?
-A: Update the DynamoDB record in the api_keys table with new quota values.
-
-### Q: Can I use other translation services?
-A: Yes, modify the `translation_processor` Lambda to integrate with other APIs.
-
-### Q: How do I handle special characters?
-A: The system handles UTF-8 encoded CSVs. Ensure files are properly encoded before upload.
-
-### Q: Is there a web interface?
-A: Currently only API-based, but you can build a frontend that uses these endpoints.
-
-### Q: How do I migrate to production?
-A: 1. Create separate environment variables 2. Adjust scaling parameters 3. Implement backup strategies for DynamoDB

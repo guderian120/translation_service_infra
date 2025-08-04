@@ -8,3 +8,5 @@ build/*
 build
 frontend
 frontend/*
+*.env
+*.js
